@@ -26,7 +26,7 @@ Notification failures never fail the build: the action logs a warning and exits 
 | `fields` | no | `[]` | Extra fields as JSON, e.g. `[{"name":"Package","value":"x"}]`. Appended after the default fields. |
 | `links` | no | `[]` | Extra links as JSON, e.g. `[{"name":"Docs","url":"https://..."}]`. Appended after the run link. |
 
-Default fields: Repository, Branch, Commit, Triggered by. Default link: Run.
+Default fields: Repository, Branch, Commit, Message (subject of the triggering commit), Triggered by. Default link: Run.
 
 ### Outputs
 

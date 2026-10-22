@@ -76,6 +76,7 @@ runs:
         fi
 
         SHA="${GITHUB_SHA:0:7}"
+        COMMIT_MESSAGE=$(git log -1 --format=%s "$GITHUB_SHA" 2>/dev/null)
         RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
         REF_CHANNEL="${ELDERMONK_SLACK_CHANNEL:-}"
@@ -89,6 +90,7 @@ runs:
           --arg repo "$GITHUB_REPOSITORY" \
           --arg branch "$GITHUB_REF_NAME" \
           --arg sha "$SHA" \
+          --arg commitMessage "$COMMIT_MESSAGE" \
           --arg actor "$GITHUB_ACTOR" \
           --arg runUrl "$RUN_URL" \
           --arg refChannel "$REF_CHANNEL" \
@@ -102,6 +104,7 @@ runs:
               {name: "Repository", value: $repo},
               {name: "Branch", value: $branch},
               {name: "Commit", value: $sha},
+              {name: "Message", value: $commitMessage},
               {name: "Triggered by", value: $actor}
             ] + $extraFields),
             links: ([{name: "Run", url: $runUrl}] + $extraLinks)
