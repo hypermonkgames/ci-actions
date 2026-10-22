@@ -71,7 +71,12 @@ runs:
 
         MENTION="$IN_MENTION"
         if [ -z "$MENTION" ]; then
-          MENTION=$(git log -1 --format=%ae 2>/dev/null)
+          # Tetikleyen commit'in yazarı: job içinde sonradan atılan bot commit'leri (release vb.) değil.
+          MENTION=$(git log -1 --format=%ae "$GITHUB_SHA" 2>/dev/null)
+          # Bot ve GitHub noreply adresleri Slack kullanıcısıyla eşleşmez.
+          case "$MENTION" in
+            *"@users.noreply.github.com") MENTION="" ;;
+          esac
         fi
 
         SHA="${GITHUB_SHA:0:7}"
