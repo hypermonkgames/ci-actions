@@ -2,6 +2,9 @@ name: Eldermonk Notify
 description: Posts or updates a CI status message in Slack through eldermonk.
 
 inputs:
+  url:
+    description: Eldermonk base URL (ELDERMONK_URL secret).
+    required: true
   token:
     description: Eldermonk bearer token (ELDERMONK_TOKEN).
     required: true
@@ -42,6 +45,7 @@ runs:
     - id: notify
       shell: bash
       env:
+        IN_URL: ${{ inputs.url }}
         IN_TOKEN: ${{ inputs.token }}
         IN_CHANNEL: ${{ inputs.channel }}
         IN_STATUS: ${{ inputs.status }}
@@ -100,7 +104,7 @@ runs:
           + (if $mention != "" then {mentionEmail: $mention} else {} end)
           + (if $refTs != "" then {ref: {channel: $refChannel, timestamp: $refTs}} else {} end)')
 
-        RESPONSE=$(curl -sS --max-time 20 -X POST "https://eldermonk.api.hyper-monk.com/api/v1/ci/notify" \
+        RESPONSE=$(curl -sS --max-time 20 -X POST "${IN_URL%/}/api/v1/ci/notify" \
           -H "Authorization: Bearer ${IN_TOKEN}" \
           -H "Content-Type: application/json" \
           -d "$BODY")
