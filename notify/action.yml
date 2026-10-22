@@ -2,11 +2,8 @@ name: Eldermonk Notify
 description: Posts or updates a CI status message in Slack through eldermonk.
 
 inputs:
-  url:
-    description: Eldermonk base URL (ELDERMONK_URL secret).
-    required: true
-  token:
-    description: Eldermonk bearer token (ELDERMONK_TOKEN).
+  credentials:
+    description: 'Eldermonk credentials as JSON: {"url":"https://...","token":"..."} (ELDERMONK_CREDENTIALS secret).'
     required: true
   channel:
     description: Slack channel ID.
@@ -45,8 +42,7 @@ runs:
     - id: notify
       shell: bash
       env:
-        IN_URL: ${{ inputs.url }}
-        IN_TOKEN: ${{ inputs.token }}
+        IN_CREDENTIALS: ${{ inputs.credentials }}
         IN_CHANNEL: ${{ inputs.channel }}
         IN_STATUS: ${{ inputs.status }}
         IN_TITLE: ${{ inputs.title }}
@@ -56,6 +52,16 @@ runs:
       run: |
         # Bildirim hatası build'i düşürmesin.
         set +e
+
+        # JSON'dan çıkan değerler ayrı string olduğu için log'da maskelenmez; elle maskele.
+        IN_URL=$(echo "$IN_CREDENTIALS" | jq -r '.url // empty' 2>/dev/null)
+        IN_TOKEN=$(echo "$IN_CREDENTIALS" | jq -r '.token // empty' 2>/dev/null)
+        [ -n "$IN_URL" ] && echo "::add-mask::$IN_URL"
+        [ -n "$IN_TOKEN" ] && echo "::add-mask::$IN_TOKEN"
+        if [ -z "$IN_URL" ] || [ -z "$IN_TOKEN" ]; then
+          echo "::warning::eldermonk credentials must be JSON with url and token"
+          exit 0
+        fi
 
         case "$IN_STATUS" in
           failure) STATUS=failed ;;
