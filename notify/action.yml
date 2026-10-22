@@ -50,10 +50,8 @@ runs:
         IN_FIELDS: ${{ inputs.fields }}
         IN_LINKS: ${{ inputs.links }}
       run: |
-        # Bildirim hatası build'i düşürmesin.
         set +e
 
-        # JSON'dan çıkan değerler ayrı string olduğu için log'da maskelenmez; elle maskele.
         IN_URL=$(echo "$IN_CREDENTIALS" | jq -r '.url // empty' 2>/dev/null)
         IN_TOKEN=$(echo "$IN_CREDENTIALS" | jq -r '.token // empty' 2>/dev/null)
         [ -n "$IN_URL" ] && echo "::add-mask::$IN_URL"
@@ -71,9 +69,7 @@ runs:
 
         MENTION="$IN_MENTION"
         if [ -z "$MENTION" ]; then
-          # Tetikleyen commit'in yazarı: job içinde sonradan atılan bot commit'leri (release vb.) değil.
           MENTION=$(git log -1 --format=%ae "$GITHUB_SHA" 2>/dev/null)
-          # Bot ve GitHub noreply adresleri Slack kullanıcısıyla eşleşmez.
           case "$MENTION" in
             *"@users.noreply.github.com") MENTION="" ;;
           esac
@@ -82,7 +78,6 @@ runs:
         SHA="${GITHUB_SHA:0:7}"
         RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-        # Önceki adımda ref yazıldıysa mesaj güncellenir.
         REF_CHANNEL="${ELDERMONK_SLACK_CHANNEL:-}"
         REF_TS="${ELDERMONK_SLACK_TS:-}"
 
