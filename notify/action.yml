@@ -1,0 +1,126 @@
+name: Eldermonk Notify
+description: Posts or updates a CI status message in Slack through eldermonk.
+
+inputs:
+  url:
+    description: Eldermonk base URL, e.g. https://eldermonk.example.com
+    required: true
+  token:
+    description: Eldermonk bearer token (ELDERMONK_TOKEN).
+    required: true
+  channel:
+    description: Slack channel ID.
+    required: true
+  status:
+    description: requested, started, success, failed, aborted, or a job status (success, failure, cancelled).
+    required: true
+  title:
+    description: Message title. Empty uses the server default for the status.
+    required: false
+    default: ""
+  mention-email:
+    description: Email of the user to mention. Empty uses the last commit author email.
+    required: false
+    default: ""
+  fields:
+    description: 'Extra fields as JSON, e.g. [{"name":"Package","value":"x"}]. Appended after the default fields.'
+    required: false
+    default: "[]"
+  links:
+    description: 'Extra links as JSON, e.g. [{"name":"Docs","url":"https://..."}]. Appended after the run link.'
+    required: false
+    default: "[]"
+
+outputs:
+  ref-channel:
+    description: Channel of the message, to be reused for updates.
+    value: ${{ steps.notify.outputs.ref-channel }}
+  ref-timestamp:
+    description: Timestamp of the message, to be reused for updates.
+    value: ${{ steps.notify.outputs.ref-timestamp }}
+
+runs:
+  using: composite
+  steps:
+    - id: notify
+      shell: bash
+      env:
+        IN_URL: ${{ inputs.url }}
+        IN_TOKEN: ${{ inputs.token }}
+        IN_CHANNEL: ${{ inputs.channel }}
+        IN_STATUS: ${{ inputs.status }}
+        IN_TITLE: ${{ inputs.title }}
+        IN_MENTION: ${{ inputs.mention-email }}
+        IN_FIELDS: ${{ inputs.fields }}
+        IN_LINKS: ${{ inputs.links }}
+      run: |
+        # Bildirim hatası build'i düşürmesin.
+        set +e
+
+        case "$IN_STATUS" in
+          failure) STATUS=failed ;;
+          cancelled) STATUS=aborted ;;
+          *) STATUS="$IN_STATUS" ;;
+        esac
+
+        MENTION="$IN_MENTION"
+        if [ -z "$MENTION" ]; then
+          MENTION=$(git log -1 --format=%ae 2>/dev/null)
+        fi
+
+        SHA="${GITHUB_SHA:0:7}"
+        RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+        # Önceki adımda ref yazıldıysa mesaj güncellenir.
+        REF_CHANNEL="${ELDERMONK_SLACK_CHANNEL:-}"
+        REF_TS="${ELDERMONK_SLACK_TS:-}"
+
+        BODY=$(jq -n \
+          --arg channel "$IN_CHANNEL" \
+          --arg status "$STATUS" \
+          --arg title "$IN_TITLE" \
+          --arg mention "$MENTION" \
+          --arg repo "$GITHUB_REPOSITORY" \
+          --arg branch "$GITHUB_REF_NAME" \
+          --arg sha "$SHA" \
+          --arg actor "$GITHUB_ACTOR" \
+          --arg runUrl "$RUN_URL" \
+          --arg refChannel "$REF_CHANNEL" \
+          --arg refTs "$REF_TS" \
+          --argjson extraFields "$IN_FIELDS" \
+          --argjson extraLinks "$IN_LINKS" \
+          '{
+            channel: $channel,
+            status: $status,
+            fields: ([
+              {name: "Repository", value: $repo},
+              {name: "Branch", value: $branch},
+              {name: "Commit", value: $sha},
+              {name: "Triggered by", value: $actor}
+            ] + $extraFields),
+            links: ([{name: "Run", url: $runUrl}] + $extraLinks)
+          }
+          + (if $title != "" then {title: $title} else {} end)
+          + (if $mention != "" then {mentionEmail: $mention} else {} end)
+          + (if $refTs != "" then {ref: {channel: $refChannel, timestamp: $refTs}} else {} end)')
+
+        RESPONSE=$(curl -sS --max-time 20 -X POST "${IN_URL%/}/api/v1/ci/notify" \
+          -H "Authorization: Bearer ${IN_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "$BODY")
+        if [ $? -ne 0 ]; then
+          echo "::warning::eldermonk notify request failed"
+          exit 0
+        fi
+
+        CH=$(echo "$RESPONSE" | jq -r '.ref.channel // empty' 2>/dev/null)
+        TS=$(echo "$RESPONSE" | jq -r '.ref.timestamp // empty' 2>/dev/null)
+        if [ -z "$TS" ]; then
+          echo "::warning::eldermonk notify failed: $RESPONSE"
+          exit 0
+        fi
+
+        echo "ref-channel=$CH" >> "$GITHUB_OUTPUT"
+        echo "ref-timestamp=$TS" >> "$GITHUB_OUTPUT"
+        echo "ELDERMONK_SLACK_CHANNEL=$CH" >> "$GITHUB_ENV"
+        echo "ELDERMONK_SLACK_TS=$TS" >> "$GITHUB_ENV"
